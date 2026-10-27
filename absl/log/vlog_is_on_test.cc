@@ -231,4 +231,26 @@ TEST_F(VLogIsOnTest, PatternFiltersAboveMaxVerbosity) {
   VLOG(4) << "dfgh";
 }
 
+// Verifies that VLOG_IS_ON callsites in the same file share a single
+// VLogSite instance, while callsites in different files get distinct VLogSite
+// instances.
+TEST_F(VLogIsOnTest, DeduplicatesVLogSitePerFile) {
+  if (MaxLogVerbosity().has_value() || MinLogLevel().has_value()) {
+    GTEST_SKIP();
+  }
+
+  using ::absl::log_internal::GetVLogSiteHolder;
+  auto* site1 = &decltype(GetVLogSiteHolder([] { return __FILE__; }))::site;
+  auto* site2 = &decltype(GetVLogSiteHolder([] { return __FILE__; }))::site;
+  auto* other_file_site =
+      &decltype(GetVLogSiteHolder([] { return "other_file.cc"; }))::site;
+  EXPECT_EQ(site1, site2);
+  EXPECT_NE(site1, other_file_site);
+
+  absl::SetVLogLevel("vlog_is_on_test", 2);
+  EXPECT_TRUE(VLOG_IS_ON(1));
+  EXPECT_TRUE(VLOG_IS_ON(2));
+  EXPECT_FALSE(VLOG_IS_ON(3));
+}
+
 }  // namespace
